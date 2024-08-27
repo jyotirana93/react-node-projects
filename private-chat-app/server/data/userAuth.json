@@ -1,0 +1,9 @@
+[
+  {
+    "username": "jyoti",
+
+    "accessToken": "token@123"
+  },
+  { "username": "john", "accessToken": "token@123" },
+  { "username": "geeta", "password": "geeta@admin", "accessToken": "token@123" }
+]

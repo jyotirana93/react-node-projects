@@ -1,0 +1,39 @@
+.chat-container {
+  /* background-color: green; */
+}
+
+.header {
+  background-color: purple;
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 10vh;
+  width: 100%;
+}
+
+.left-panel {
+  background-color: rgb(126, 123, 123);
+  position: fixed;
+  width: 200px;
+  height: 90vh;
+  top: 0;
+  left: 0;
+  margin-top: 10vh;
+}
+.message-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 900px;
+  height: 79vh;
+  margin: auto;
+  position: relative;
+}
+.icon {
+  height: 8px;
+  width: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  background-color: #e38968;
+  margin-right: 6px;
+}
