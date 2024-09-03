@@ -2,6 +2,9 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 const corsOptionsHandler = require('./config/corsOptions');
+const randomId = require('./utilities/randomId');
+const { InMemorySessionStore } = require('./utilities/sessionStore');
+const sessionStore = new InMemorySessionStore();
 
 app.use(cors(corsOptionsHandler));
 
@@ -24,39 +27,80 @@ const io = require('socket.io')(server, {
 
 io.use((socket, next) => {
   const username = socket.handshake.auth.username;
+  const sessionID = socket.handshake.auth.sessionID;
 
-  console.log({ username });
+  if (sessionID) {
+    const session = sessionStore.findSession(sessionID);
+
+    if (session) {
+      socket.sessionID = sessionID;
+      socket.userID = session.userID;
+      socket.username = session.username;
+
+      return next();
+    }
+  }
 
   if (!username) {
     return next(new Error('invalid username'));
   }
 
+  socket.sessionID = randomId();
+  socket.userID = randomId();
   socket.username = username;
-
   next();
 });
 
 io.on('connection', (socket) => {
-  console.log('socket id=>', socket.id);
-
-  let users = [];
-  io.of('/').sockets.forEach((socket, id) => {
-    users.push({ userID: id, username: socket.username });
+  sessionStore.saveSession(socket.sessionID, {
+    userID: socket.userID,
+    sessionID: socket.sessionID,
+    username: socket.username,
+    connected: true,
   });
 
-  io.emit('users', users);
+  socket.emit('session', {
+    userID: socket.userID,
+    sessionID: socket.sessionID,
+  });
+
+  socket.join(socket.userID);
+
+  let users = [];
+  sessionStore.findAllSession().forEach((session) => {
+    users.push({
+      userID: session.userID,
+      sessionID: session.sessionID,
+      username: session.username,
+      connected: session.connected,
+    });
+  });
+
+  const updatedUsers = users.filter((user) => user.connected);
+  const disconnectedUser = users.filter((user) => !user.connected).length;
+
+  io.emit('users', disconnectedUser >= 3 ? updatedUsers : users);
 
   socket.on('private message', ({ content, to }) => {
     socket.to(to).emit('private message', {
       content,
-      from: socket.id,
+      from: socket.userID,
       to,
     });
   });
 
   socket.on('disconnect', () => {
-    console.log('user disconnected', socket.id);
-    const socketId = socket.id;
-    io.emit('user disconnected', socketId);
+    console.log('user disconnected', socket.userID, socket.username);
+
+    const userID = socket.userID;
+    const sessionID = socket.sessionID;
+    const username = socket.username;
+    io.emit('user disconnected', userID);
+    sessionStore.saveSession(sessionID, {
+      userID,
+      sessionID,
+      username,
+      connected: false,
+    });
   });
 });

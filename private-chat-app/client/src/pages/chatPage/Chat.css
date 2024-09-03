@@ -7,8 +7,11 @@
   position: absolute;
   top: 0;
   left: 0;
-  height: 10vh;
+  height: 50px;
   width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .left-panel {
@@ -18,7 +21,7 @@
   height: 90vh;
   top: 0;
   left: 0;
-  margin-top: 10vh;
+  margin-top: 50px;
 }
 .message-panel {
   display: flex;

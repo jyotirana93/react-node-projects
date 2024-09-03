@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 import useAuth from '../../hooks/useAuth';
 import './Chat.css';
 import User from '../../components/user/User';
+import { useNavigate } from 'react-router-dom';
 
 const URL = 'http://localhost:3500';
 
@@ -13,9 +14,13 @@ const Chat = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [messageData, setMessageData] = useState('');
   const selectedUserIDRef = useRef(null);
+  const navigate = useNavigate();
+  const sessionID = parseInt(localStorage.getItem('sessionID'));
+  const userID = parseInt(localStorage.getItem('userID'));
+  const username = localStorage.getItem('username');
 
   const onUserSelectHandler = (userSelected) => {
-    setSelectedUser({ ...userSelected });
+    selectedUserIDRef.current = userSelected;
 
     setUsers((preUsers) => {
       return preUsers.map((user) => {
@@ -33,16 +38,17 @@ const Chat = () => {
   const onSubmitUserMessageHandler = (e) => {
     e.preventDefault();
 
-    if (selectedUser) {
+    if (selectedUserIDRef.current) {
       socket.emit('private message', {
         content: messageData,
-        to: selectedUser.userID,
-        toName: selectedUser.username,
+
+        to: selectedUserIDRef.current?.userID,
+        toName: selectedUserIDRef.current?.username,
       });
 
       setUsers((preUsers) => {
         return preUsers.map((user) => {
-          if (user.userID === selectedUser?.userID) {
+          if (user.userID === selectedUserIDRef.current?.userID) {
             const updatedUser = {
               ...user,
               hasNewMessages: false,
@@ -52,12 +58,10 @@ const Chat = () => {
               ],
             };
 
-            setSelectedUser({ ...updatedUser });
+            selectedUserIDRef.current = updatedUser;
 
             return { ...updatedUser };
           }
-
-          setSelectedUser({ ...user });
 
           return user;
         });
@@ -67,9 +71,17 @@ const Chat = () => {
     setMessageData('');
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('sessionID');
+    localStorage.removeItem('userID');
+    localStorage.removeItem('username');
+    navigate('/login');
+  };
+
   useEffect(() => {
-    if (auth?.username) {
-      socket.auth = { username: auth?.username };
+    if (sessionID) {
+      socket.auth = { username: auth?.username || username, sessionID };
+      socket.userID = userID;
       socket.connect();
     }
 
@@ -77,25 +89,27 @@ const Chat = () => {
       setUsers(
         userData
           .map((user) => {
-            if (user.userID === socket.id) {
+            if (user.userID === socket.userID) {
               return {
                 ...user,
-                connected: true,
-                self: true,
-                messages: [],
-                hasNewMessages: false,
-              };
-            } else {
-              return {
-                ...user,
-                connected: true,
-                self: false,
+                self: user?.userID === socket?.userID,
                 messages: [],
                 hasNewMessages: false,
               };
             }
+            return {
+              ...user,
+              self: false,
+              messages: [],
+              hasNewMessages: false,
+            };
           })
-          .sort((a, b) => (a.self ? -1 : a.b ? 1 : 0))
+          .sort((a, b) => {
+            if (a.self) return -1;
+            if (b.self) return 1;
+            if (a.username.toLowerCase() < b.username.toLowerCase()) return -1;
+            return a.username.toLowerCase() > b.username.toLowerCase() ? 1 : 0;
+          })
       );
     };
 
@@ -104,21 +118,18 @@ const Chat = () => {
 
       setUsers((preUsers) => {
         return preUsers.map((user) => {
-          if (user.userID === from) {
+          const fromSelf = user?.userID === socket.userID;
+          if (user?.userID === from) {
             const updatedUser = {
               ...user,
-              hasNewMessages: selectedUserIDRef.current !== user?.userID, // Only set `hasNewMessages` to true if the message is from another user
-              messages: [...user.messages, { content, fromSelf: false }],
+              hasNewMessages:
+                selectedUserIDRef.current?.userID !== user?.userID,
+              messages: [...user.messages, { content, fromSelf }],
             };
 
-            setSelectedUser((prevSelectedUser) => {
-              selectedUserIDRef.current = prevSelectedUser?.userID;
-
-              if (prevSelectedUser?.userID === from) {
-                return { ...updatedUser };
-              }
-              return prevSelectedUser;
-            });
+            if (selectedUserIDRef.current?.userID === from) {
+              selectedUserIDRef.current = updatedUser;
+            }
 
             return updatedUser;
           }
@@ -154,7 +165,18 @@ const Chat = () => {
 
   return (
     <section className="chat-container">
-      <div className="header">Welcome {auth?.username}</div>
+      <div className="header">
+        <span
+          style={{ width: '100%', margin: 'auto', textTransform: 'capitalize' }}
+        >
+          Welcome {auth?.username || username}
+        </span>
+        <span>
+          <button style={{ marginRight: '50px' }} onClick={handleLogout}>
+            Logout
+          </button>
+        </span>
+      </div>
       <div className="left-panel">
         <ul
           style={{
@@ -171,22 +193,22 @@ const Chat = () => {
                 key={user?.userID}
                 user={user}
                 onSelect={onUserSelectHandler}
-                isSelected={user?.userID === selectedUser?.userID}
+                isSelected={user?.userID === selectedUserIDRef.current?.userID}
               />
             );
           })}
         </ul>
       </div>
-      {selectedUser && (
+      {selectedUserIDRef.current?.userID && (
         <div className="message-panel">
           <p>
-            {selectedUser?.messages.map((message, i) => {
+            {selectedUserIDRef.current?.messages.map((message, i) => {
               return (
                 <li key={i} style={{ listStyle: 'none' }}>
                   <span>
                     {message?.fromSelf
                       ? '(Yourself):'
-                      : `${selectedUser.username}: `}
+                      : `${selectedUserIDRef.current?.username}: `}
                   </span>
                   <span> {message.content}</span>
                 </li>

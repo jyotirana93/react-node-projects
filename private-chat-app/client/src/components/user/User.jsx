@@ -30,7 +30,11 @@ const User = ({ user, onSelect, isSelected }) => {
       </span>
       {user.hasNewMessages ? (
         <img
-          style={{ position: 'absolute', top: '18px', right: '100px' }}
+          style={{
+            position: 'absolute',
+            top: '18px',
+            right: '60px',
+          }}
           src={messageIcon}
           alt="message icon"
         />
