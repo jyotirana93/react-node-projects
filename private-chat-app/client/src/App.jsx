@@ -12,13 +12,14 @@ import {
 } from 'react-router-dom';
 
 function App() {
-  const { auth } = useAuth();
+  const { auth, setAuth } = useAuth();
   const sessionID = localStorage.getItem('sessionID');
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!sessionID) {
       navigate('/login');
+      setAuth(null);
     }
   }, []);
 

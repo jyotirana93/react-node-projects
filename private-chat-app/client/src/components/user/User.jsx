@@ -11,6 +11,7 @@ const User = ({ user, onSelect, isSelected }) => {
         padding: '10px',
         marginTop: '5px',
         position: 'relative',
+        cursor: 'pointer',
       }}
       onClick={() => onSelect(user)}
     >

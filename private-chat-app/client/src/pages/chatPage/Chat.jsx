@@ -1,17 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import io from 'socket.io-client';
 import useAuth from '../../hooks/useAuth';
 import './Chat.css';
 import User from '../../components/user/User';
 import { useNavigate } from 'react-router-dom';
-
-const URL = 'http://localhost:3500';
+import useSocket from '../../hooks/useSocket';
 
 const Chat = () => {
   const { auth } = useAuth();
-  const [socket] = useState(() => io(URL, { autoConnect: false }));
+  const [socket] = useSocket();
   const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
   const [messageData, setMessageData] = useState('');
   const selectedUserIDRef = useRef(null);
   const navigate = useNavigate();
@@ -24,12 +21,13 @@ const Chat = () => {
 
     setUsers((preUsers) => {
       return preUsers.map((user) => {
-        if (user.userID === userSelected.userID) {
+        if (user?.userID === userSelected?.userID) {
           return {
             ...user,
             hasNewMessages: false,
           };
         }
+
         return user;
       });
     });
@@ -38,12 +36,12 @@ const Chat = () => {
   const onSubmitUserMessageHandler = (e) => {
     e.preventDefault();
 
-    if (selectedUserIDRef.current) {
+    if (selectedUserIDRef.current && messageData.trim() !== '') {
       socket.emit('private message', {
         content: messageData,
 
         to: selectedUserIDRef.current?.userID,
-        toName: selectedUserIDRef.current?.username,
+        to_username: selectedUserIDRef.current?.username,
       });
 
       setUsers((preUsers) => {
@@ -56,6 +54,12 @@ const Chat = () => {
                 ...user.messages,
                 { content: messageData, fromSelf: true },
               ],
+              // messages: user.messages.map((message) => {
+              //   return {
+              //     ...message,
+              //     fromSelf: message.from === socket?.userID,
+              //   };
+              // }),
             };
 
             selectedUserIDRef.current = updatedUser;
@@ -89,36 +93,54 @@ const Chat = () => {
       setUsers(
         userData
           .map((user) => {
-            if (user.userID === socket.userID) {
+            const updatedMessages = user.messages.map((message) => {
               return {
-                ...user,
-                self: user?.userID === socket?.userID,
-                messages: [],
-                hasNewMessages: false,
+                ...message,
+                fromSelf: message.from === socket.userID,
               };
-            }
+            });
+
             return {
               ...user,
-              self: false,
-              messages: [],
+              self: user.userID === socket.userID,
+              messages: updatedMessages,
               hasNewMessages: false,
             };
           })
           .sort((a, b) => {
             if (a.self) return -1;
             if (b.self) return 1;
-            if (a.username.toLowerCase() < b.username.toLowerCase()) return -1;
-            return a.username.toLowerCase() > b.username.toLowerCase() ? 1 : 0;
+            if (a.username > b.username) return -1;
+            return a.username < b.username ? 1 : 0;
           })
       );
     };
 
+    const handleConnectedUser = (connectedUser) => {
+      setUsers((preUsers) => {
+        const existingUser = preUsers.find(
+          (user) => user.userID === connectedUser.userID
+        );
+
+        if (existingUser) {
+          return preUsers.map((user) => {
+            if (user.userID === existingUser.userID) {
+              return { ...user, connected: true };
+            }
+            return user;
+          });
+        }
+        return [...preUsers, { ...connectedUser }];
+      });
+    };
+
     const handlePrivateMessage = (messageData) => {
-      const { from, content, to } = messageData;
+      const { from, content } = messageData;
 
       setUsers((preUsers) => {
         return preUsers.map((user) => {
           const fromSelf = user?.userID === socket.userID;
+
           if (user?.userID === from) {
             const updatedUser = {
               ...user,
@@ -144,19 +166,20 @@ const Chat = () => {
         return preUsers.map((user) => {
           if (user.userID === id) {
             return { ...user, connected: false };
-          } else {
-            return user;
           }
+          return user;
         });
       });
     };
 
     socket.on('users', handleUsers);
+    socket.on('user connected', handleConnectedUser);
     socket.on('private message', handlePrivateMessage);
     socket.on('user disconnected', handleUserDisconnected);
 
     return () => {
       socket.off('users', handleUsers);
+      socket.off('user connected', handleConnectedUser);
       socket.off('private message', handlePrivateMessage);
       socket.off('user disconnected', handleUserDisconnected);
       socket.disconnect();
@@ -187,7 +210,7 @@ const Chat = () => {
             alignItems: 'flex-start',
           }}
         >
-          {users.map((user) => {
+          {users?.map((user) => {
             return (
               <User
                 key={user?.userID}

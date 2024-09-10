@@ -39,16 +39,16 @@ const Login = () => {
 
       setAuth({ username, accessToken });
 
-      const handleSession = (session) => {
-        localStorage.setItem('sessionID', session.sessionID);
-        localStorage.setItem('userID', session.userID);
-        localStorage.setItem('username', username);
-      };
-      socket.on('session', handleSession);
-      socket.auth = { username };
-      socket.connect();
-
       if (accessToken) {
+        console.log(accessToken);
+        const handleSession = (session) => {
+          localStorage.setItem('sessionID', session.sessionID);
+          localStorage.setItem('userID', session.userID);
+          localStorage.setItem('username', username);
+        };
+        socket.on('session', handleSession);
+        socket.auth = { username };
+        socket.connect();
         setTimeout(() => {
           navigate('/chat');
         }, 1000);

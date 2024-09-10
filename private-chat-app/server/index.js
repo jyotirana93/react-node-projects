@@ -5,6 +5,8 @@ const corsOptionsHandler = require('./config/corsOptions');
 const randomId = require('./utilities/randomId');
 const { InMemorySessionStore } = require('./utilities/sessionStore');
 const sessionStore = new InMemorySessionStore();
+const { InMemoryMessageStore } = require('./utilities/messageStore.js');
+const messageStore = new InMemoryMessageStore();
 
 app.use(cors(corsOptionsHandler));
 
@@ -67,40 +69,75 @@ io.on('connection', (socket) => {
   socket.join(socket.userID);
 
   let users = [];
+  const messagesPerUser = new Map();
+  messageStore.findMessage(socket.userID).forEach((message) => {
+    const otherUser =
+      socket.userID === message.from ? message.to : message.from;
+
+    if (messagesPerUser.has(otherUser)) {
+      messagesPerUser.get(otherUser).push(message);
+    } else {
+      messagesPerUser.set(otherUser, [message]);
+    }
+  });
+
   sessionStore.findAllSession().forEach((session) => {
     users.push({
       userID: session.userID,
       sessionID: session.sessionID,
       username: session.username,
       connected: session.connected,
+      messages: messagesPerUser.get(session.userID) || [],
     });
   });
 
   const updatedUsers = users.filter((user) => user.connected);
   const disconnectedUser = users.filter((user) => !user.connected).length;
 
-  io.emit('users', disconnectedUser >= 3 ? updatedUsers : users);
+  socket.emit('users', users);
 
-  socket.on('private message', ({ content, to }) => {
-    socket.to(to).emit('private message', {
-      content,
-      from: socket.userID,
-      to,
-    });
+  // socket.emit('users', disconnectedUser >= 3 ? updatedUsers : users);
+  //socket.emit('users', disconnectedUser >= 4 ? updatedUsers : users);
+
+  socket.broadcast.emit('user connected', {
+    userID: socket.userID,
+    sessionID: socket.sessionID,
+    username: socket.username,
+    connected: true,
+    messages: [],
   });
 
-  socket.on('disconnect', () => {
+  socket.on('private message', ({ content, to, to_username }) => {
+    const message = {
+      content,
+      from: socket.userID,
+      from_username: socket.username,
+      to,
+      to_username,
+    };
+
+    messageStore.saveMessage(message);
+    socket.to(to).emit('private message', message);
+  });
+
+  socket.on('disconnect', async () => {
     console.log('user disconnected', socket.userID, socket.username);
 
-    const userID = socket.userID;
-    const sessionID = socket.sessionID;
-    const username = socket.username;
-    io.emit('user disconnected', userID);
-    sessionStore.saveSession(sessionID, {
-      userID,
-      sessionID,
-      username,
-      connected: false,
-    });
+    const matchingSockets = await io.in(socket.userID).allSockets();
+    const isDisconnected = matchingSockets.size === 0;
+
+    if (isDisconnected) {
+      const userID = socket.userID;
+      const sessionID = socket.sessionID;
+      const username = socket.username;
+
+      socket.broadcast.emit('user disconnected', userID);
+      sessionStore.saveSession(sessionID, {
+        userID,
+        sessionID,
+        username,
+        connected: false,
+      });
+    }
   });
 });
